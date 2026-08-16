@@ -30,6 +30,8 @@ DeepSeek 继续负责推理、规划和操作；Vision Router 把图片感知交
 在本仓库目录执行：
 
 ```bash
+cp .env.example .env
+# 只在本机编辑 .env 并填写 DEEPSEEK_API_KEY，切勿提交 .env。
 npx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add .
 npx @deepseek-ai/dsh@0.1.0-rc.6 web
 ```
@@ -77,8 +79,26 @@ npx @deepseek-ai/dsh@0.1.0-rc.6 web
 - 除非开启 `allowRemoteFallback`，自动路由只使用本地 Provider。
 - Ollama 地址必须是通过 HTTP 访问的 `localhost` 或 `127.0.0.1`。
 - 远程密钥只读取 `apiKeyEnv` 指定的环境变量。
+- 真实密钥只能保存在已忽略的本地 `.env`；仓库只提交值为空的 `.env.example`。
+- 不要把 API Key 写入 `cordis.patch.yml`、提示词、Issue、日志、截图或 Git 提交。
+- 开启远程回退意味着图片数据可能发送给所配置的远程 Provider；启用前请确认其隐私政策。
 - 只有 Agent 调用 `inspect_image` 时才会读取图片路径。
 - 每次结果都会记录 Provider 和模型，便于审计与复现。
+
+### 本地密钥配置
+
+```bash
+cp .env.example .env
+chmod 600 .env
+```
+
+然后只在本机编辑 `.env`：
+
+```dotenv
+DEEPSEEK_API_KEY=
+```
+
+仓库的 `.gitignore` 会排除 `.env` 和 `.env.*`，并仅允许提交值为空的 `.env.example` 模板。
 
 ## 工具参数
 

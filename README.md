@@ -30,6 +30,8 @@ DeepSeek remains the reasoning agent. Vision Router delegates image perception t
 From this repository:
 
 ```bash
+cp .env.example .env
+# Edit .env locally and set DEEPSEEK_API_KEY. Never commit .env.
 npx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add .
 npx @deepseek-ai/dsh@0.1.0-rc.6 web
 ```
@@ -77,8 +79,26 @@ Set `allowRemoteFallback: true` only when images may leave the machine automatic
 - Automatic routing is local-only unless `allowRemoteFallback` is enabled.
 - Ollama endpoints must resolve to `localhost` or `127.0.0.1` over HTTP.
 - Remote credentials are read from the environment variable named by `apiKeyEnv`.
+- Store real secrets only in the ignored local `.env`; commit only `.env.example` with empty values.
+- Never paste API keys into `cordis.patch.yml`, prompts, issues, logs, screenshots, or commits.
+- Enabling remote fallback permits image bytes to be sent to the configured remote provider. Review its privacy policy first.
 - Image paths are read only when the agent calls `inspect_image`.
 - Provider/model identity is included in every result for auditability.
+
+### Local secret setup
+
+```bash
+cp .env.example .env
+chmod 600 .env
+```
+
+Then edit `.env` locally:
+
+```dotenv
+DEEPSEEK_API_KEY=
+```
+
+The repository `.gitignore` excludes `.env` and `.env.*`, while explicitly allowing the empty `.env.example` template.
 
 ## Tool contract
 
