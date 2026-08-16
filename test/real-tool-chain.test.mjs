@@ -11,6 +11,7 @@ const config = {
     model: 'auto', apiKeyEnv: '', priority: 100,
   }],
   allowRemoteFallback: false,
+  automaticAttachments: true,
   timeoutMs: 180000,
   maxImageBytes: 20 * 1024 * 1024,
 }
@@ -19,6 +20,19 @@ test('mounts in the real DSH tool runtime and executes local vision', { timeout:
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  ctx.provide('attachments', {
+    imageLimits: {
+      maxImageBytes: 20 * 1024 * 1024, maxImagesPerMessage: 8,
+      maxMessageImageBytes: 40 * 1024 * 1024, maxImagePixels: 40_000_000,
+      mediaTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+    },
+    async readImage() { throw new Error('not used in this path-based test') },
+  })
+  ctx.provide('llm', {
+    async resolveModelInfo(provider, model) {
+      return { provider, id: model, name: model, inputModalities: ['text'] }
+    },
+  })
   await ctx.plugin(VisionRouter, config)
   assert.ok(ctx.tools.get('inspect_image'))
 

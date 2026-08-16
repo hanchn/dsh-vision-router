@@ -11,6 +11,7 @@ DeepSeek 继续负责推理、规划和操作；Vision Router 把图片感知交
 ## 功能
 
 - 根据 Ollama 模型元数据零配置发现视觉模型
+- 原生支持 DSH 拖拽和剪贴板图片，并自动调用本地视觉模型
 - 本地优先，默认禁止远程自动回退
 - 支持多个带优先级的 Provider
 - 支持 Ollama 与 OpenAI-compatible 视觉接口
@@ -36,7 +37,9 @@ npx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add .
 npx @deepseek-ai/dsh@0.1.0-rc.6 web
 ```
 
-打开 `http://127.0.0.1:3080`，然后向 Agent 提问：
+打开 `http://127.0.0.1:3080`，把图片拖进输入框（或按 `Cmd/Ctrl+V` 粘贴），然后直接提问。Vision Router 会先分析附件，再把文字结果交给不支持视觉的 DeepSeek 主模型。
+
+对于文件系统中的图片，也可以继续显式调用工具：
 
 ```text
 使用 inspect_image 分析 /绝对路径/screenshot.png，然后解释这个 UI 的问题。
@@ -54,6 +57,7 @@ npx @deepseek-ai/dsh@0.1.0-rc.6 web
 - id: vision-router
   name: '@hanchn/dsh-vision-router'
   config:
+    automaticAttachments: true
     providers:
       - id: local-auto
         type: ollama
@@ -74,6 +78,8 @@ npx @deepseek-ai/dsh@0.1.0-rc.6 web
 
 只有在允许图片自动离开本机时，才应设置 `allowRemoteFallback: true`。任务也可以通过 Provider `id` 显式选择某个已配置后端，此时不受自动回退策略影响。
 
+启用 `automaticAttachments: true` 后，插件会先向 DSH 的请求准入层声明“已路由的视觉能力”，再在 `agent/pre-step` 阶段通过附件服务读取当前会话授权的图片，路由给视觉模型，并在纯文本主模型调用前把图片替换为带 Provider/模型信息的可审计文字结果。设为 `false` 可关闭自动处理，只保留显式的 `inspect_image` 工具。
+
 ## 隐私与安全
 
 - 除非开启 `allowRemoteFallback`，自动路由只使用本地 Provider。
@@ -82,7 +88,8 @@ npx @deepseek-ai/dsh@0.1.0-rc.6 web
 - 真实密钥只能保存在已忽略的本地 `.env`；仓库只提交值为空的 `.env.example`。
 - 不要把 API Key 写入 `cordis.patch.yml`、提示词、Issue、日志、截图或 Git 提交。
 - 开启远程回退意味着图片数据可能发送给所配置的远程 Provider；启用前请确认其隐私政策。
-- 只有 Agent 调用 `inspect_image` 时才会读取图片路径。
+- 上传图片只通过 DSH 附件服务读取，内部存储路径不会暴露给模型。
+- 只有 Agent 调用 `inspect_image` 时才会读取文件系统图片路径。
 - 每次结果都会记录 Provider 和模型，便于审计与复现。
 
 ### 本地密钥配置
@@ -120,6 +127,7 @@ inspect_image({
 - **缺少远程密钥：**在启动 DSH 前导出 `apiKeyEnv` 配置的环境变量。
 - **调用超时：**增大 `timeoutMs`；模型首次加载通常较慢。
 - **图片格式不支持：**转换为 PNG、JPEG、WebP 或 GIF。
+- **主模型仍提示不支持视觉：**确认 `automaticAttachments: true`，修改插件后重启 DSH，并检查 `vision-router` 已挂载。
 
 ## 开发
 

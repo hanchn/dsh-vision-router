@@ -10,5 +10,6 @@
             apiKeyEnv: ''
             priority: 100
         allowRemoteFallback: false
+        automaticAttachments: true
         timeoutMs: 180000
         maxImageBytes: 20971520

@@ -11,6 +11,7 @@ DeepSeek remains the reasoning agent. Vision Router delegates image perception t
 ## Features
 
 - Zero-config discovery of vision-capable Ollama models via model metadata
+- Native DSH drag-and-drop and clipboard image intake with automatic local analysis
 - Local-first routing with remote fallback disabled by default
 - Multiple prioritized providers
 - Ollama and OpenAI-compatible vision APIs
@@ -36,7 +37,9 @@ npx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add .
 npx @deepseek-ai/dsh@0.1.0-rc.6 web
 ```
 
-Then open `http://127.0.0.1:3080` and ask:
+Then open `http://127.0.0.1:3080`, drag an image into the composer (or paste it with `Cmd/Ctrl+V`), and ask a question. Vision Router analyzes the attachment before a text-only DeepSeek model receives the turn.
+
+The explicit tool also remains available for filesystem images:
 
 ```text
 Use inspect_image to analyze /absolute/path/to/screenshot.png, then explain the UI issue.
@@ -54,6 +57,7 @@ Edit the plugin row in your DSH profile patch:
 - id: vision-router
   name: '@hanchn/dsh-vision-router'
   config:
+    automaticAttachments: true
     providers:
       - id: local-auto
         type: ollama
@@ -74,6 +78,8 @@ Edit the plugin row in your DSH profile patch:
 
 Set `allowRemoteFallback: true` only when images may leave the machine automatically. A prompt can explicitly select a configured provider by passing its `id`, regardless of fallback policy.
 
+With `automaticAttachments: true`, the plugin exposes a routed vision capability to DSH's admission layer, reads authorized image attachments through the attachment service during `agent/pre-step`, routes them to a vision provider, and replaces image blocks with an auditable text analysis before the text-only main model call. Set it to `false` to use only the explicit `inspect_image` tool.
+
 ## Privacy and security
 
 - Automatic routing is local-only unless `allowRemoteFallback` is enabled.
@@ -82,7 +88,8 @@ Set `allowRemoteFallback: true` only when images may leave the machine automatic
 - Store real secrets only in the ignored local `.env`; commit only `.env.example` with empty values.
 - Never paste API keys into `cordis.patch.yml`, prompts, issues, logs, screenshots, or commits.
 - Enabling remote fallback permits image bytes to be sent to the configured remote provider. Review its privacy policy first.
-- Image paths are read only when the agent calls `inspect_image`.
+- Uploaded images are read through DSH's attachment service; internal storage paths are never exposed to the model.
+- Filesystem image paths are read only when the agent calls `inspect_image`.
 - Provider/model identity is included in every result for auditability.
 
 ### Local secret setup
@@ -120,6 +127,7 @@ inspect_image({
 - **Missing remote key:** export the exact environment variable configured in `apiKeyEnv` before starting DSH.
 - **Timeout:** increase `timeoutMs`; first model load can be slow.
 - **Unsupported image:** convert it to PNG, JPEG, WebP, or GIF.
+- **The main model says it cannot see images:** confirm `automaticAttachments: true`, restart DSH after changing the plugin, and verify that `vision-router` is mounted.
 
 ## Development
 

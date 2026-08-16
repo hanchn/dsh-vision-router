@@ -4,7 +4,7 @@ import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
 export const name = 'dsh-vision-router'
-export const inject = ['tools']
+export const inject = ['tools', 'attachments', 'llm']
 
 const ProviderConfig = z.object({
   id: z.string().required(),
@@ -21,6 +21,7 @@ export const Config = z.object({
     model: 'auto', apiKeyEnv: '', priority: 100,
   }]),
   allowRemoteFallback: z.boolean().default(false),
+  automaticAttachments: z.boolean().default(true),
   timeoutMs: z.number().min(1000).default(180000),
   maxImageBytes: z.number().min(1).default(20 * 1024 * 1024),
 })
@@ -134,8 +135,124 @@ async function loadImage(imagePath, maxImageBytes) {
   return { base64: bytes.toString('base64'), mime, label: absolute }
 }
 
-export function apply(ctx, config) {
+async function routeVision(config, image, prompt, requestedProvider) {
   const providers = [...config.providers].sort((a, b) => b.priority - a.priority)
+  const selected = requestedProvider
+    ? providers.filter(provider => provider.id === requestedProvider)
+    : providers.filter(provider => provider.type === 'ollama' || config.allowRemoteFallback)
+  if (selected.length === 0) {
+    throw new Error(requestedProvider ? `Unknown provider ${requestedProvider}` : 'No eligible vision provider configured')
+  }
+  const failures = []
+  for (const provider of selected) {
+    try {
+      if (provider.type === 'ollama') {
+        const endpoint = normalizeLocalEndpoint(provider.baseUrl)
+        let model = provider.model
+        if (model === 'auto') {
+          const models = await discoverVisionModels(endpoint, Math.min(config.timeoutMs, 30000))
+          if (models.length === 0) throw new Error('no local model with vision metadata was found')
+          model = models[0].name
+        }
+        const data = await ollamaJson(endpoint, '/api/chat', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model, stream: false,
+            messages: [{ role: 'user', content: prompt, images: [image.base64] }],
+            options: { temperature: 0.1 },
+          }),
+        }, config.timeoutMs)
+        const analysis = data.message?.content?.trim()
+        if (!analysis) throw new Error(`model ${model} returned no text`)
+        return { model: `${provider.id}/${model}`, analysis }
+      }
+      if (provider.type === 'openai-compatible') {
+        const result = await openAICompatible(provider, prompt, image, config.timeoutMs)
+        return { model: `${provider.id}/${result.model}`, analysis: result.analysis }
+      }
+      throw new Error(`unsupported provider type ${provider.type}`)
+    } catch (error) {
+      failures.push(`${provider.id}: ${error.message}`)
+    }
+  }
+  throw new Error(`All eligible vision providers failed: ${failures.join('; ')}`)
+}
+
+export async function replaceImageAttachments(attachments, config, messages, signal) {
+  if (!config.automaticAttachments) return messages
+  const rewritten = []
+  for (const message of messages) {
+    if (!message.content.some(block => block.type === 'image')) {
+      rewritten.push(message)
+      continue
+    }
+    const userText = message.content
+      .filter(block => block.type === 'text')
+      .map(block => block.text)
+      .join('\n')
+      .trim()
+    const content = []
+    for (const block of message.content) {
+      signal?.throwIfAborted()
+      if (block.type !== 'image') {
+        content.push(block)
+        continue
+      }
+      try {
+        const stored = await attachments.readImage(block.attachment, signal)
+        if (stored.data.byteLength > config.maxImageBytes) {
+          throw new Error(`image exceeds ${config.maxImageBytes} bytes`)
+        }
+        const image = {
+          base64: Buffer.from(stored.data).toString('base64'),
+          mime: stored.ref.mediaType,
+          label: stored.ref.name ?? String(stored.ref.attachmentId),
+        }
+        const prompt = `${DEFAULT_PROMPTS.auto}\n\nThe user's accompanying request is:\n${userText || '(no text provided)'}`
+        const result = await routeVision(config, image, prompt)
+        content.push({
+          type: 'text',
+          text: `\n\n[Vision Router automatically analyzed attached image "${image.label}" with ${result.model}]\n${result.analysis}\n[End of image analysis]\n`,
+        })
+      } catch (error) {
+        content.push({
+          type: 'text',
+          text: `\n\n[Vision Router could not analyze the attached image: ${error.message}]\n`,
+        })
+      }
+    }
+    rewritten.push({ ...message, content })
+  }
+  return rewritten
+}
+
+export function advertiseRoutedVision(llm) {
+  const original = llm.resolveModelInfo
+  llm.resolveModelInfo = async function (...args) {
+    const info = await original.apply(this, args)
+    return {
+      ...info,
+      inputModalities: [...new Set([...(info.inputModalities ?? []), 'image'])],
+    }
+  }
+  return () => {
+    llm.resolveModelInfo = original
+  }
+}
+
+export function apply(ctx, config) {
+  if (config.automaticAttachments) {
+    ctx.effect(() => advertiseRoutedVision(ctx.llm), 'vision-router:model-capability-bridge')
+  }
+  ctx.on('agent/pre-step', async ({ messages, signal }, next) => {
+    const decision = await next()
+    if (decision.kind === 'reject') return decision
+    return {
+      kind: 'enter',
+      messages: await replaceImageAttachments(ctx.attachments, config, decision.messages, signal),
+    }
+  })
   ctx.tools.register(defineTool({
     name: 'inspect_image',
     description: 'Inspect a local image with an automatically discovered local multimodal model. Use this whenever visual evidence from an image, screenshot, diagram, chart, UI, scanned text, or photographed error is needed. The image stays on the local machine and is sent only to local Ollama.',
@@ -178,44 +295,8 @@ export function apply(ctx, config) {
       const image = await loadImage(args.image_path, config.maxImageBytes)
       const mode = args.mode ?? 'auto'
       const prompt = args.prompt?.trim() || DEFAULT_PROMPTS[mode] || DEFAULT_PROMPTS.auto
-      const selected = args.provider
-        ? providers.filter(provider => provider.id === args.provider)
-        : providers.filter(provider => provider.type === 'ollama' || config.allowRemoteFallback)
-      if (selected.length === 0) throw new Error(args.provider ? `Unknown provider ${args.provider}` : 'No eligible vision provider configured')
-      const failures = []
-      for (const provider of selected) {
-        try {
-          if (provider.type === 'ollama') {
-            const endpoint = normalizeLocalEndpoint(provider.baseUrl)
-            let model = provider.model
-            if (model === 'auto') {
-              const models = await discoverVisionModels(endpoint, Math.min(config.timeoutMs, 30000))
-              if (models.length === 0) throw new Error('no local model with vision metadata was found')
-              model = models[0].name
-            }
-            const data = await ollamaJson(endpoint, '/api/chat', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                model, stream: false,
-                messages: [{ role: 'user', content: prompt, images: [image.base64] }],
-                options: { temperature: 0.1 },
-              }),
-            }, config.timeoutMs)
-            const analysis = data.message?.content?.trim()
-            if (!analysis) throw new Error(`model ${model} returned no text`)
-            return { model: `${provider.id}/${model}`, image: image.label, analysis }
-          }
-          if (provider.type === 'openai-compatible') {
-            const result = await openAICompatible(provider, prompt, image, config.timeoutMs)
-            return { model: `${provider.id}/${result.model}`, image: image.label, analysis: result.analysis }
-          }
-          throw new Error(`unsupported provider type ${provider.type}`)
-        } catch (error) {
-          failures.push(`${provider.id}: ${error.message}`)
-        }
-      }
-      throw new Error(`All eligible vision providers failed: ${failures.join('; ')}`)
+      const result = await routeVision(config, image, prompt, args.provider)
+      return { model: result.model, image: image.label, analysis: result.analysis }
     },
     presentCall: args => ({
       card: 'generic',
