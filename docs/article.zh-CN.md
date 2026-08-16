@@ -214,6 +214,11 @@ const response = await fetch('http://127.0.0.1:11434/api/chat', {
   name: '@hanchn/dsh-vision-router'
   config:
     automaticAttachments: true
+    archiveDirectory: .dsh-vision-router/images
+    discoveryCacheMs: 300000
+    resultCacheMs: 3600000
+    ollamaKeepAlive: 30m
+    maxVisionTokens: 512
     providers:
       - id: local-auto
         type: ollama
@@ -355,31 +360,36 @@ pnpm check
 
 ## 十二、原生附件桥接：让拖图真正可用
 
-DSH Web 支持把图片直接拖入页面，或者把剪贴板图片粘贴到输入框。Vision Router 注入 DSH 的 `attachments` 服务，在 `agent/pre-step` 阶段完成下面的链路：
+DSH Web 支持把图片直接拖入页面，或者把剪贴板图片粘贴到输入框。Vision Router 注入 DSH 的 `attachments` 服务，并在 Provider 适配器边界完成下面的链路：
 
 ```text
-拖入/粘贴图片 → DSH attachment store → 授权读取图片字节
-              → Ollama/Gemma 分析 → 文字结果替换图片块 → DeepSeek
+拖入/粘贴图片 → DSH attachment store → 会话保留原图缩略图
+              → 本地哈希归档 → Ollama/Gemma 分析
+              → 仅 Provider 请求替换为格式化文字 → DeepSeek
 ```
 
-关键点是通过附件服务读取，而不是把 DSH 内部存储路径暴露给模型：
+关键点是通过附件服务读取，并包装纯文本模型的 Adapter 请求，而不是修改会话消息或暴露 DSH 内部存储路径：
 
 ```js
-ctx.on('agent/pre-step', async ({ messages, signal }, next) => {
-  const decision = await next()
-  if (decision?.kind === 'reject') return decision
-  const rewritten = await replaceImageAttachments(ctx.attachments, config, messages, signal)
-  return { kind: 'enter', value: { messages: rewritten } }
-})
+adapter.stream = function (options) {
+  if (!hasImage(options.messages)) return original.call(this, options)
+  return routeImagesAtAdapterBoundary(this, original, options)
+}
 ```
 
-`automaticAttachments: true` 默认开启。插件还会让 DSH 的图片准入检查识别到“路由后的视觉能力”，避免请求在进入 Agent 之前就被纯文本模型能力校验拦截。视觉成功时，DeepSeek 收到带 Provider 和模型标识的文字证据；视觉失败时，插件也会把失败原因变成文字，避免把不受支持的图片继续传给纯文本模型。显式的 `inspect_image` 仍可用于本地路径或 Data URL。
+`automaticAttachments: true` 默认开启。插件还会让 DSH 的图片准入检查识别到“路由后的视觉能力”，避免请求在进入 Agent 之前就被纯文本模型能力校验拦截。视觉成功时，DeepSeek 收到带标题、图片名、Provider/模型来源和正文的 Markdown 上下文；会话历史仍展示原图。视觉失败时，插件会把失败原因变成文字，避免把不受支持的图片继续传给纯文本模型。显式的 `inspect_image` 仍可用于本地路径或 Data URL，并使用格式化结果卡片。
+
+插件默认把图片按 SHA-256 内容摘要归档到 `.dsh-vision-router/images/`。该目录已加入 `.gitignore`，文件名不包含原始名称；设置 `archiveDirectory: ''` 可以关闭额外归档。
+
+### 延迟优化
+
+视觉链路的总延迟由本地模型发现、模型装载、Gemma 推理和 DeepSeek 推理共同组成。插件采用四项优化：并行检查 Ollama 候选模型并缓存发现结果；通过 `keep_alive` 让 Gemma 常驻一段时间；限制单次视觉输出 token；按“图片内容 + 问题 + Provider 配置”缓存分析结果。历史会话再次携带同一张图片时会命中缓存，不会每轮重复运行 26B 模型。首次冷启动仍取决于本机内存带宽和模型大小，这是无法完全消除的成本。
 
 ## 十三、下一步演进方向
 
 这个项目还可以继续扩展：
 
-1. **保留原始附件展示**：在模型请求层转换内容，同时让会话历史继续显示原图缩略图；
+1. **本地图库管理**：提供归档清理、容量上限和可视化管理；
 2. **托管 llama.cpp runner**：没有 Ollama 时自动拉起本地推理服务；
 3. **MLX 后端**：针对 Apple Silicon 优化；
 4. **更智能的路由**：OCR、UI、图表分别选择更合适的模型；

@@ -1,5 +1,6 @@
-import { readFile, stat } from 'node:fs/promises'
-import { extname, resolve } from 'node:path'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { extname, join, resolve } from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
@@ -22,6 +23,11 @@ export const Config = z.object({
   }]),
   allowRemoteFallback: z.boolean().default(false),
   automaticAttachments: z.boolean().default(true),
+  archiveDirectory: z.string().default('.dsh-vision-router/images'),
+  discoveryCacheMs: z.number().min(0).default(300000),
+  resultCacheMs: z.number().min(0).default(3600000),
+  ollamaKeepAlive: z.string().default('30m'),
+  maxVisionTokens: z.number().min(64).default(512),
   timeoutMs: z.number().min(1000).default(180000),
   maxImageBytes: z.number().min(1).default(20 * 1024 * 1024),
 })
@@ -93,10 +99,12 @@ function visionScore(model) {
   return score
 }
 
-async function discoverVisionModels(endpoint, timeoutMs) {
+const discoveryCache = new Map()
+const resultCache = new Map()
+
+async function discoverVisionModelsUncached(endpoint, timeoutMs) {
   const tags = await ollamaJson(endpoint, '/api/tags', {}, timeoutMs)
-  const candidates = []
-  for (const listed of tags.models ?? []) {
+  const candidates = await Promise.all((tags.models ?? []).map(async listed => {
     try {
       const shown = await ollamaJson(endpoint, '/api/show', {
         method: 'POST',
@@ -104,12 +112,26 @@ async function discoverVisionModels(endpoint, timeoutMs) {
         body: JSON.stringify({ model: listed.name }),
       }, timeoutMs)
       const keys = Object.keys(shown.model_info ?? {})
-      if (keys.some(key => key.includes('.vision.'))) candidates.push({ ...listed, shown })
+      return keys.some(key => key.includes('.vision.')) ? { ...listed, shown } : undefined
     } catch {
       // A single broken model must not prevent discovery of the remaining local models.
+      return undefined
     }
+  }))
+  return candidates.filter(Boolean).sort((a, b) => visionScore(b) - visionScore(a))
+}
+
+async function discoverVisionModels(endpoint, timeoutMs, cacheMs = 300000) {
+  const cached = discoveryCache.get(endpoint)
+  if (cached && Date.now() - cached.createdAt < cacheMs) return cached.value
+  const pending = discoverVisionModelsUncached(endpoint, timeoutMs)
+  discoveryCache.set(endpoint, { createdAt: Date.now(), value: pending })
+  try {
+    return await pending
+  } catch (error) {
+    discoveryCache.delete(endpoint)
+    throw error
   }
-  return candidates.sort((a, b) => visionScore(b) - visionScore(a))
 }
 
 function mimeFor(path) {
@@ -135,7 +157,34 @@ async function loadImage(imagePath, maxImageBytes) {
   return { base64: bytes.toString('base64'), mime, label: absolute }
 }
 
+const MIME_EXTENSIONS = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+}
+
+async function archiveImage(data, mediaType, directory) {
+  if (!directory) return
+  const extension = MIME_EXTENSIONS[mediaType]
+  if (!extension) return
+  const targetDirectory = resolve(directory)
+  const digest = createHash('sha256').update(data).digest('hex')
+  await mkdir(targetDirectory, { recursive: true })
+  await writeFile(join(targetDirectory, `${digest}${extension}`), data, { flag: 'wx' }).catch(error => {
+    if (error.code !== 'EEXIST') throw error
+  })
+}
+
 async function routeVision(config, image, prompt, requestedProvider) {
+  const cacheKey = createHash('sha256')
+    .update(image.base64)
+    .update('\0').update(prompt)
+    .update('\0').update(requestedProvider ?? '')
+    .update('\0').update(JSON.stringify(config.providers))
+    .digest('hex')
+  const cached = resultCache.get(cacheKey)
+  if (cached && Date.now() - cached.createdAt < config.resultCacheMs) return cached.value
   const providers = [...config.providers].sort((a, b) => b.priority - a.priority)
   const selected = requestedProvider
     ? providers.filter(provider => provider.id === requestedProvider)
@@ -150,7 +199,7 @@ async function routeVision(config, image, prompt, requestedProvider) {
         const endpoint = normalizeLocalEndpoint(provider.baseUrl)
         let model = provider.model
         if (model === 'auto') {
-          const models = await discoverVisionModels(endpoint, Math.min(config.timeoutMs, 30000))
+          const models = await discoverVisionModels(endpoint, Math.min(config.timeoutMs, 30000), config.discoveryCacheMs)
           if (models.length === 0) throw new Error('no local model with vision metadata was found')
           model = models[0].name
         }
@@ -158,18 +207,22 @@ async function routeVision(config, image, prompt, requestedProvider) {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            model, stream: false,
+            model, stream: false, keep_alive: config.ollamaKeepAlive,
             messages: [{ role: 'user', content: prompt, images: [image.base64] }],
-            options: { temperature: 0.1 },
+            options: { temperature: 0.1, num_predict: config.maxVisionTokens },
           }),
         }, config.timeoutMs)
         const analysis = data.message?.content?.trim()
         if (!analysis) throw new Error(`model ${model} returned no text`)
-        return { model: `${provider.id}/${model}`, analysis }
+        const result = { model: `${provider.id}/${model}`, analysis }
+        resultCache.set(cacheKey, { createdAt: Date.now(), value: result })
+        return result
       }
       if (provider.type === 'openai-compatible') {
         const result = await openAICompatible(provider, prompt, image, config.timeoutMs)
-        return { model: `${provider.id}/${result.model}`, analysis: result.analysis }
+        const routed = { model: `${provider.id}/${result.model}`, analysis: result.analysis }
+        resultCache.set(cacheKey, { createdAt: Date.now(), value: routed })
+        return routed
       }
       throw new Error(`unsupported provider type ${provider.type}`)
     } catch (error) {
@@ -204,8 +257,10 @@ export async function replaceImageAttachments(attachments, config, messages, sig
         if (stored.data.byteLength > config.maxImageBytes) {
           throw new Error(`image exceeds ${config.maxImageBytes} bytes`)
         }
+        const bytes = Buffer.from(stored.data)
+        await archiveImage(bytes, stored.ref.mediaType, config.archiveDirectory)
         const image = {
-          base64: Buffer.from(stored.data).toString('base64'),
+          base64: bytes.toString('base64'),
           mime: stored.ref.mediaType,
           label: stored.ref.name ?? String(stored.ref.attachmentId),
         }
@@ -213,7 +268,7 @@ export async function replaceImageAttachments(attachments, config, messages, sig
         const result = await routeVision(config, image, prompt)
         content.push({
           type: 'text',
-          text: `\n\n[Vision Router automatically analyzed attached image "${image.label}" with ${result.model}]\n${result.analysis}\n[End of image analysis]\n`,
+          text: `\n\n### Local vision context (analysis complete)\n\n- Image: ${image.label}\n- Vision model: ${result.model}\n- Instruction: Treat the analysis below as the available visual evidence. Do not search for the image file or call another vision tool unless the user explicitly requests verification.\n\n${result.analysis}\n`,
         })
       } catch (error) {
         content.push({
@@ -225,6 +280,41 @@ export async function replaceImageAttachments(attachments, config, messages, sig
     rewritten.push({ ...message, content })
   }
   return rewritten
+}
+
+function hasImage(messages) {
+  return messages.some(message => message.content.some(block => block.type === 'image'))
+}
+
+export function installAdapterBridge(llm, attachments, config) {
+  const restorers = new Map()
+  const wrap = () => {
+    for (const registration of llm.adapters?.values?.() ?? []) {
+      const adapter = registration.adapter
+      if (restorers.has(adapter)) continue
+      const original = adapter.stream
+      adapter.stream = function (options) {
+        if (!hasImage(options.messages)) return original.call(this, options)
+        const owner = this
+        return (async function * () {
+          const resolved = await owner.resolveModel(options.provider, options.model, options.signal)
+          if (resolved.inputModalities?.includes('image')) {
+            yield * original.call(owner, options)
+            return
+          }
+          const messages = await replaceImageAttachments(attachments, config, options.messages, options.signal)
+          yield * original.call(owner, { ...options, messages })
+        })()
+      }
+      restorers.set(adapter, () => { adapter.stream = original })
+    }
+  }
+  wrap()
+  const disposeUpdated = llm.ctx?.on?.('llm/adapters-updated', wrap)
+  return () => {
+    disposeUpdated?.()
+    for (const restore of restorers.values()) restore()
+  }
 }
 
 export function advertiseRoutedVision(llm) {
@@ -244,15 +334,8 @@ export function advertiseRoutedVision(llm) {
 export function apply(ctx, config) {
   if (config.automaticAttachments) {
     ctx.effect(() => advertiseRoutedVision(ctx.llm), 'vision-router:model-capability-bridge')
+    ctx.effect(() => installAdapterBridge(ctx.llm, ctx.attachments, config), 'vision-router:adapter-bridge')
   }
-  ctx.on('agent/pre-step', async ({ messages, signal }, next) => {
-    const decision = await next()
-    if (decision.kind === 'reject') return decision
-    return {
-      kind: 'enter',
-      messages: await replaceImageAttachments(ctx.attachments, config, decision.messages, signal),
-    }
-  })
   ctx.tools.register(defineTool({
     name: 'inspect_image',
     description: 'Inspect a local image with an automatically discovered local multimodal model. Use this whenever visual evidence from an image, screenshot, diagram, chart, UI, scanned text, or photographed error is needed. The image stays on the local machine and is sent only to local Ollama.',
@@ -288,7 +371,7 @@ export function apply(ctx, config) {
       },
       render: (_args, value) => [{
         type: 'text',
-        text: `Local vision result from ${value.model} for ${value.image}:\n\n${value.analysis}`,
+        text: `## Vision analysis\n\n**Image:** ${value.image}  \n**Model:** ${value.model}\n\n${value.analysis}`,
       }],
     },
     async execute(args) {

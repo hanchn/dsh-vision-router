@@ -12,6 +12,7 @@ DeepSeek 继续负责推理、规划和操作；Vision Router 把图片感知交
 
 - 根据 Ollama 模型元数据零配置发现视觉模型
 - 原生支持 DSH 拖拽和剪贴板图片，并自动调用本地视觉模型
+- 会话中保留原图缩略图，并按内容哈希归档到本地目录
 - 本地优先，默认禁止远程自动回退
 - 支持多个带优先级的 Provider
 - 支持 Ollama 与 OpenAI-compatible 视觉接口
@@ -58,6 +59,11 @@ npx @deepseek-ai/dsh@0.1.0-rc.6 web
   name: '@hanchn/dsh-vision-router'
   config:
     automaticAttachments: true
+    archiveDirectory: .dsh-vision-router/images
+    discoveryCacheMs: 300000
+    resultCacheMs: 3600000
+    ollamaKeepAlive: 30m
+    maxVisionTokens: 512
     providers:
       - id: local-auto
         type: ollama
@@ -78,7 +84,11 @@ npx @deepseek-ai/dsh@0.1.0-rc.6 web
 
 只有在允许图片自动离开本机时，才应设置 `allowRemoteFallback: true`。任务也可以通过 Provider `id` 显式选择某个已配置后端，此时不受自动回退策略影响。
 
-启用 `automaticAttachments: true` 后，插件会先向 DSH 的请求准入层声明“已路由的视觉能力”，再在 `agent/pre-step` 阶段通过附件服务读取当前会话授权的图片，路由给视觉模型，并在纯文本主模型调用前把图片替换为带 Provider/模型信息的可审计文字结果。设为 `false` 可关闭自动处理，只保留显式的 `inspect_image` 工具。
+启用 `automaticAttachments: true` 后，插件会先向 DSH 的请求准入层声明“已路由的视觉能力”，再通过附件服务读取当前会话授权的图片。原始消息和缩略图保持不变；只有真正发往 Provider 的请求会在适配器边界被临时转换为格式化文字。设为 `false` 可关闭自动处理，只保留显式的 `inspect_image` 工具。
+
+`archiveDirectory` 会为每张自动处理的图片保存一份按内容寻址的本地副本。默认目录 `.dsh-vision-router/images` 已被 Git 忽略；设为空字符串可关闭额外归档，聊天预览仍由 DSH 自身的附件存储提供。
+
+模型发现结果默认缓存 5 分钟，相同图片与问题的分析结果默认缓存 1 小时。`ollamaKeepAlive` 避免模型反复装载，`maxVisionTokens` 控制视觉输出长度和延迟；任一缓存时长设为 `0` 即可关闭。
 
 ## 隐私与安全
 
@@ -89,6 +99,7 @@ npx @deepseek-ai/dsh@0.1.0-rc.6 web
 - 不要把 API Key 写入 `cordis.patch.yml`、提示词、Issue、日志、截图或 Git 提交。
 - 开启远程回退意味着图片数据可能发送给所配置的远程 Provider；启用前请确认其隐私政策。
 - 上传图片只通过 DSH 附件服务读取，内部存储路径不会暴露给模型。
+- 归档文件名只包含 SHA-256 摘要和图片扩展名，不包含原始文件名。
 - 只有 Agent 调用 `inspect_image` 时才会读取文件系统图片路径。
 - 每次结果都会记录 Provider 和模型，便于审计与复现。
 
@@ -126,6 +137,7 @@ inspect_image({
 - **无法连接 Ollama：**确认 `curl http://127.0.0.1:11434/api/tags` 成功。
 - **缺少远程密钥：**在启动 DSH 前导出 `apiKeyEnv` 配置的环境变量。
 - **调用超时：**增大 `timeoutMs`；模型首次加载通常较慢。
+- **首张图片较慢：**26B 模型装载和推理可能需要数秒。建议保持 `ollamaKeepAlive` 开启；重复图片会直接使用结果缓存。
 - **图片格式不支持：**转换为 PNG、JPEG、WebP 或 GIF。
 - **主模型仍提示不支持视觉：**确认 `automaticAttachments: true`，修改插件后重启 DSH，并检查 `vision-router` 已挂载。
 

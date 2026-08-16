@@ -11,5 +11,10 @@
             priority: 100
         allowRemoteFallback: false
         automaticAttachments: true
+        archiveDirectory: .dsh-vision-router/images
+        discoveryCacheMs: 300000
+        resultCacheMs: 3600000
+        ollamaKeepAlive: 30m
+        maxVisionTokens: 512
         timeoutMs: 180000
         maxImageBytes: 20971520

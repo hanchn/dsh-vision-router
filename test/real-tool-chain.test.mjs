@@ -12,6 +12,11 @@ const config = {
   }],
   allowRemoteFallback: false,
   automaticAttachments: true,
+  archiveDirectory: '',
+  discoveryCacheMs: 300000,
+  resultCacheMs: 3600000,
+  ollamaKeepAlive: '30m',
+  maxVisionTokens: 512,
   timeoutMs: 180000,
   maxImageBytes: 20 * 1024 * 1024,
 }

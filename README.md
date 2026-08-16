@@ -12,6 +12,7 @@ DeepSeek remains the reasoning agent. Vision Router delegates image perception t
 
 - Zero-config discovery of vision-capable Ollama models via model metadata
 - Native DSH drag-and-drop and clipboard image intake with automatic local analysis
+- Original thumbnails remain visible in chat; images are archived locally by content hash
 - Local-first routing with remote fallback disabled by default
 - Multiple prioritized providers
 - Ollama and OpenAI-compatible vision APIs
@@ -58,6 +59,11 @@ Edit the plugin row in your DSH profile patch:
   name: '@hanchn/dsh-vision-router'
   config:
     automaticAttachments: true
+    archiveDirectory: .dsh-vision-router/images
+    discoveryCacheMs: 300000
+    resultCacheMs: 3600000
+    ollamaKeepAlive: 30m
+    maxVisionTokens: 512
     providers:
       - id: local-auto
         type: ollama
@@ -78,7 +84,11 @@ Edit the plugin row in your DSH profile patch:
 
 Set `allowRemoteFallback: true` only when images may leave the machine automatically. A prompt can explicitly select a configured provider by passing its `id`, regardless of fallback policy.
 
-With `automaticAttachments: true`, the plugin exposes a routed vision capability to DSH's admission layer, reads authorized image attachments through the attachment service during `agent/pre-step`, routes them to a vision provider, and replaces image blocks with an auditable text analysis before the text-only main model call. Set it to `false` to use only the explicit `inspect_image` tool.
+With `automaticAttachments: true`, the plugin exposes a routed vision capability to DSH's admission layer and reads authorized attachments through its attachment service. The original message and thumbnail stay intact; only the provider-bound request is converted to formatted text at the adapter boundary. Set it to `false` to use only the explicit `inspect_image` tool.
+
+`archiveDirectory` stores a content-addressed local copy of every automatically processed image. The default `.dsh-vision-router/images` directory is ignored by Git. Set it to an empty string to disable the extra archive; DSH's attachment store still supplies the chat preview.
+
+Discovery results are cached for five minutes and identical image/prompt analyses for one hour. `ollamaKeepAlive` avoids repeated model reloads, while `maxVisionTokens` bounds latency and output size. Set either cache duration to `0` to disable that cache.
 
 ## Privacy and security
 
@@ -89,6 +99,7 @@ With `automaticAttachments: true`, the plugin exposes a routed vision capability
 - Never paste API keys into `cordis.patch.yml`, prompts, issues, logs, screenshots, or commits.
 - Enabling remote fallback permits image bytes to be sent to the configured remote provider. Review its privacy policy first.
 - Uploaded images are read through DSH's attachment service; internal storage paths are never exposed to the model.
+- Archived filenames contain only a SHA-256 digest and image extension, not the original filename.
 - Filesystem image paths are read only when the agent calls `inspect_image`.
 - Provider/model identity is included in every result for auditability.
 
@@ -126,6 +137,7 @@ inspect_image({
 - **Ollama unavailable:** confirm `curl http://127.0.0.1:11434/api/tags` succeeds.
 - **Missing remote key:** export the exact environment variable configured in `apiKeyEnv` before starting DSH.
 - **Timeout:** increase `timeoutMs`; first model load can be slow.
+- **Slow first image:** a 26B model can take several seconds to load and infer. Keep `ollamaKeepAlive` enabled; repeated images use the result cache.
 - **Unsupported image:** convert it to PNG, JPEG, WebP, or GIF.
 - **The main model says it cannot see images:** confirm `automaticAttachments: true`, restart DSH after changing the plugin, and verify that `vision-router` is mounted.
 
