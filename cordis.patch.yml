@@ -1,0 +1,14 @@
+- insert:
+    - id: vision-router
+      name: '@hanchn/dsh-vision-router'
+      config:
+        providers:
+          - id: local-auto
+            type: ollama
+            baseUrl: http://127.0.0.1:11434
+            model: auto
+            apiKeyEnv: ''
+            priority: 100
+        allowRemoteFallback: false
+        timeoutMs: 180000
+        maxImageBytes: 20971520
