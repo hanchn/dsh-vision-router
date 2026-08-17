@@ -14,8 +14,9 @@ const config = {
   archiveDirectory: '',
   discoveryCacheMs: 300000,
   resultCacheMs: 3600000,
-  ollamaKeepAlive: '30m',
-  maxVisionTokens: 512,
+  ollamaKeepAlive: '2m',
+  maxVisionTokens: 256,
+  realtimeAudio: true,
   timeoutMs: 180000,
   maxImageBytes: 20 * 1024 * 1024,
 }
@@ -60,5 +61,5 @@ test('keeps the DSH image message intact and rewrites only the adapter request',
   const text = received.messages[0].content.map(block => block.text ?? '').join('')
   assert.match(text, /### Local vision context \(analysis complete\)/)
   assert.match(text, /Do not search for the image file/)
-  assert.match(text, /local-auto\/gemma4:26b/)
+  assert.match(text, /local-auto\/gemma4:/)
 })

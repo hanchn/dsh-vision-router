@@ -12,9 +12,27 @@
         allowRemoteFallback: false
         automaticAttachments: true
         archiveDirectory: .dsh-vision-router/images
+        cacheDirectory: .dsh-vision-router/cache
         discoveryCacheMs: 300000
         resultCacheMs: 3600000
-        ollamaKeepAlive: 30m
-        maxVisionTokens: 512
+        resultCacheMaxEntries: 64
+        ollamaKeepAlive: 2m
+        ollamaIdleUnloadMs: 60000
+        maxVisionTokens: 256
         timeoutMs: 180000
         maxImageBytes: 20971520
+        realtimeAudio: true
+        transcriptionLocale: zh-CN
+        audioChunkMs: 1500
+        maxAudioSeconds: 30
+        maxAudioBytes: 10485760
+        tts:
+          enabled: true
+          autoStart: true
+          baseUrl: http://127.0.0.1:8000
+          model: mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit
+          voice: Serena
+          responseFormat: wav
+          browserFallback: false
+          maxTextCharacters: 8000
+          keepAliveMs: 300000

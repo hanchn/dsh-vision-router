@@ -15,8 +15,9 @@ const config = {
   archiveDirectory: '',
   discoveryCacheMs: 300000,
   resultCacheMs: 3600000,
-  ollamaKeepAlive: '30m',
-  maxVisionTokens: 512,
+  ollamaKeepAlive: '2m',
+  maxVisionTokens: 256,
+  realtimeAudio: true,
   timeoutMs: 180000,
   maxImageBytes: 20 * 1024 * 1024,
 }
