@@ -1,14 +1,14 @@
 window.__ModuleLoader__.load({
-  id: '@hanchn/dsh-vision-router',
+  id: '@hanchn/dsh-multimodal-router',
   factory: require => {
     const module = { exports: {} }
     const exports = module.exports
     const React = require('react')
 
-    const styleId = '@hanchn/dsh-vision-router/realtime-audio.css'
+    const styleId = '@hanchn/dsh-multimodal-router/realtime-audio.css'
     if (document.querySelector(`style[data-plugin-css="${styleId}"]`) === null) {
       const style = document.createElement('style')
-      style.dataset.plugin = '@hanchn/dsh-vision-router'
+      style.dataset.plugin = '@hanchn/dsh-multimodal-router'
       style.dataset.pluginCss = styleId
       style.textContent = `
         .dvr-tool-button{width:28px;height:28px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-content-secondary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;line-height:1}
@@ -174,7 +174,7 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => {
         const controller = new AbortController()
-        const refresh = () => fetch('/vision-router/audio/capabilities', { signal: controller.signal })
+        const refresh = () => fetch('/multimodal-router/audio/capabilities', { signal: controller.signal })
           .then(response => response.json())
           .then(value => setCapability(value))
           .catch(reason => {
@@ -259,7 +259,7 @@ window.__ModuleLoader__.load({
             if (sampleCount === lastSentSamples) return latestText
             lastSentSamples = sampleCount
             setBusy(true)
-            request = fetch('/vision-router/audio/transcribe', {
+            request = fetch('/multimodal-router/audio/transcribe', {
               method: 'POST', headers: {
                 'content-type': 'audio/wav',
                 'x-dvr-language': window.navigator.language || 'zh-CN',
@@ -346,7 +346,7 @@ window.__ModuleLoader__.load({
         }
         const controller = new AbortController()
         activeOutput.current = { stop: () => { controller.abort(); resume() } }
-        fetch('/vision-router/audio/speech', {
+        fetch('/multimodal-router/audio/speech', {
           method: 'POST', signal: controller.signal,
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ text }),

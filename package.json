@@ -1,11 +1,11 @@
 {
-  "name": "@hanchn/dsh-vision-router",
-  "version": "0.4.0",
+  "name": "@hanchn/dsh-multimodal-router",
+  "version": "0.5.0",
   "description": "Zero-config local vision and realtime audio routing for DeepSeek Harness",
   "type": "module",
   "main": "./src/index.js",
   "bin": {
-    "dsh-vision-router": "./src/cli.js"
+    "dsh-multimodal-router": "./src/cli.js"
   },
   "exports": {
     ".": "./src/index.js",
@@ -33,10 +33,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hanchn/dsh-vision-router.git"
+    "url": "git+https://github.com/hanchn/dsh-multimodal-router.git"
   },
-  "homepage": "https://github.com/hanchn/dsh-vision-router#readme",
-  "bugs": "https://github.com/hanchn/dsh-vision-router/issues",
+  "homepage": "https://github.com/hanchn/dsh-multimodal-router#readme",
+  "bugs": "https://github.com/hanchn/dsh-multimodal-router/issues",
   "dsh": {
     "runtimeDependencies": [
       {
@@ -45,7 +45,7 @@
         "optional": true,
         "managedByPlugin": true,
         "purpose": "High-quality local Qwen3-TTS spoken replies on Apple Silicon",
-        "install": "npx @hanchn/dsh-vision-router setup-tts (interactive, opt-in)",
+        "install": "npx @hanchn/dsh-multimodal-router setup-tts (interactive, opt-in)",
         "start": "mlx_audio.server --host 127.0.0.1 --port 8000",
         "healthUrl": "http://127.0.0.1:8000/v1/models"
       }

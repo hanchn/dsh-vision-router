@@ -34,7 +34,7 @@ test('exposes realtime audio only when a compatible local model is available', a
     writeHead(status, headers) { this.status = status; this.headers = headers },
     end(chunk) { chunks.push(chunk) },
   }
-  await routes.get('/vision-router/audio/capabilities')({ method: 'GET' }, response)
+  await routes.get('/multimodal-router/audio/capabilities')({ method: 'GET' }, response)
   const body = JSON.parse(chunks.join(''))
   assert.equal(response.status, 200)
   assert.equal(body.available, true)

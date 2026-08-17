@@ -8,7 +8,7 @@ import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import OpenCC from 'opencc-js/t2cn'
 
-export const name = 'dsh-vision-router'
+export const name = 'dsh-multimodal-router'
 export const inject = ['tools', 'attachments', 'llm']
 
 const traditionalToSimplified = OpenCC.Converter({ from: 'tw', to: 'cn' })
@@ -46,8 +46,8 @@ export const Config = z.object({
   }]),
   allowRemoteFallback: z.boolean().default(false),
   automaticAttachments: z.boolean().default(true),
-  archiveDirectory: z.string().default('.dsh-vision-router/images'),
-  cacheDirectory: z.string().default('.dsh-vision-router/cache'),
+  archiveDirectory: z.string().default('.dsh-multimodal-router/images'),
+  cacheDirectory: z.string().default('.dsh-multimodal-router/cache'),
   discoveryCacheMs: z.number().min(0).default(300000),
   resultCacheMs: z.number().min(0).default(3600000),
   resultCacheMaxEntries: z.number().min(1).default(64),
@@ -403,8 +403,8 @@ async function synthesizeSpeech(config, text, language) {
 }
 
 export function installRealtimeAudioRoutes(webServer, config) {
-  const capabilityPath = '/vision-router/audio/capabilities'
-  const transcriptionPath = '/vision-router/audio/transcribe'
+  const capabilityPath = '/multimodal-router/audio/capabilities'
+  const transcriptionPath = '/multimodal-router/audio/transcribe'
   const disposeCapabilities = webServer.register({
     kind: 'exact', path: capabilityPath,
     async handler(req, res) {
@@ -450,7 +450,7 @@ export function installRealtimeAudioRoutes(webServer, config) {
     },
   })
   const disposeSpeech = webServer.register({
-    kind: 'exact', path: '/vision-router/audio/speech',
+    kind: 'exact', path: '/multimodal-router/audio/speech',
     async handler(req, res) {
       if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' })
       try {
@@ -677,7 +677,7 @@ export async function replaceImageAttachments(attachments, config, messages, sig
       } catch (error) {
         content.push({
           type: 'text',
-          text: `\n\n[Vision Router could not analyze the attached image: ${error.message}]\n`,
+          text: `\n\n[Multimodal Router could not analyze the attached image: ${error.message}]\n`,
         })
       }
     }
@@ -737,18 +737,18 @@ export function advertiseRoutedVision(llm) {
 
 export function apply(ctx, config) {
   if (config.automaticAttachments) {
-    ctx.effect(() => advertiseRoutedVision(ctx.llm), 'vision-router:model-capability-bridge')
-    ctx.effect(() => installAdapterBridge(ctx.llm, ctx.attachments, config), 'vision-router:adapter-bridge')
+    ctx.effect(() => advertiseRoutedVision(ctx.llm), 'multimodal-router:model-capability-bridge')
+    ctx.effect(() => installAdapterBridge(ctx.llm, ctx.attachments, config), 'multimodal-router:adapter-bridge')
   }
   if (config.realtimeAudio) {
     ctx.inject(['webServer'], audioCtx => {
       audioCtx.effect(
         () => installManagedTts(audioCtx, config),
-        'vision-router:managed-tts',
+        'multimodal-router:managed-tts',
       )
       audioCtx.effect(
         () => installRealtimeAudioRoutes(audioCtx.webServer, config),
-        'vision-router:realtime-audio-routes',
+        'multimodal-router:realtime-audio-routes',
       )
     })
   }

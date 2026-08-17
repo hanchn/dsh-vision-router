@@ -1,12 +1,12 @@
-# DeepSeek Harness 视觉与实时声音路由器
+# DeepSeek Harness 多模态路由器
 
 [English](README.md)
 
 这是一个面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的零配置多模态插件。它为 Agent 提供图片理解，并在模型与本地音色运行时均就绪时开放完整的实时语音对话。
 
-## 为什么需要 Vision Router？
+## 为什么需要 Multimodal Router？
 
-DeepSeek 继续负责推理、规划和操作；Vision Router 把图片感知交给本地或显式配置的多模态模型，再将文字证据返回给 DeepSeek。默认链路只使用本机模型，不需要填写模型名或端口。
+DeepSeek 继续负责推理、规划和操作；Multimodal Router 把图片感知交给本地或显式配置的多模态模型，再将文字证据返回给 DeepSeek。默认链路只使用本机模型，不需要填写模型名或端口。
 
 ## 功能
 
@@ -36,12 +36,12 @@ Qwen3-TTS 不通过 Ollama 安装。本项目把 MLX-Audio 声明为可选运行
 
 ```bash
 brew install uv
-npx @hanchn/dsh-vision-router setup-tts
+npx @hanchn/dsh-multimodal-router setup-tts
 ```
 
-安装命令会先询问是否下载，默认选项为“不下载”，不会强制安装。无人值守安装可显式使用 `--enable` 或 `--disable`。选择启用后不需要手动启动第二个服务：Vision Router 会随 DSH 自动启动和关闭 MLX-Audio。第一次语音回答会自动下载默认模型 `mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit`（约 2GB）到 Hugging Face 本机缓存。默认使用温暖女声 `Serena`。可以在插件配置的 `tts.voice` 中改为 `Vivian`、`Dylan`、`Uncle_Fu` 或 `Eric`。
+安装命令会先询问是否下载，默认选项为“不下载”，不会强制安装。无人值守安装可显式使用 `--enable` 或 `--disable`。选择启用后不需要手动启动第二个服务：Multimodal Router 会随 DSH 自动启动和关闭 MLX-Audio。第一次语音回答会自动下载默认模型 `mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit`（约 2GB）到 Hugging Face 本机缓存。默认使用温暖女声 `Serena`。可以在插件配置的 `tts.voice` 中改为 `Vivian`、`Dylan`、`Uncle_Fu` 或 `Eric`。
 
-排障时可以运行 `npx @hanchn/dsh-vision-router check-tts`；只有手动排障才需要直接执行 `mlx_audio.server --host 127.0.0.1 --port 8000`。
+排障时可以运行 `npx @hanchn/dsh-multimodal-router check-tts`；只有手动排障才需要直接执行 `mlx_audio.server --host 127.0.0.1 --port 8000`。
 
 如果用户选择不下载，或者 MLX-Audio 未就绪，插件不会显示语音对话入口，也不会退回浏览器/操作系统音色；图片功能仍可正常使用。
 
@@ -56,7 +56,7 @@ npx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add .
 npx @deepseek-ai/dsh@0.1.0-rc.6 web
 ```
 
-打开 `http://127.0.0.1:3080`，点击输入框工具栏的回形针按钮选择图片，也可以拖入图片或按 `Cmd/Ctrl+V` 粘贴，然后直接提问。Vision Router 会先分析附件，再把文字结果交给不支持视觉的 DeepSeek 主模型。
+打开 `http://127.0.0.1:3080`，点击输入框工具栏的回形针按钮选择图片，也可以拖入图片或按 `Cmd/Ctrl+V` 粘贴，然后直接提问。Multimodal Router 会先分析附件，再把文字结果交给不支持视觉的 DeepSeek 主模型。
 
 如果本机同时存在支持音频的模型与可用的 Qwen3-TTS，输入框工具栏会自动出现语音对话按钮。点击后开始倾听，本地增量识别约每 1.5 秒触发一次并把结果同步到输入框，检测到停顿后自动完成最后一段转写并发送；模型回答结束后由本机 Qwen3-TTS 朗读，然后继续倾听下一轮。朗读过程中点击按钮可打断并立即讲话，再次点击可结束语音对话。Gemma 4 单段音频最长 30 秒。原始声音只发送给本机 Ollama，不会保存到项目目录。
 
@@ -90,12 +90,12 @@ Gemma 4 的音频能力是“声音输入、文字输出”，不会直接生成
 在 DSH profile patch 中修改插件配置：
 
 ```yaml
-- id: vision-router
-  name: '@hanchn/dsh-vision-router'
+- id: multimodal-router
+  name: '@hanchn/dsh-multimodal-router'
   config:
     automaticAttachments: true
-    archiveDirectory: .dsh-vision-router/images
-    cacheDirectory: .dsh-vision-router/cache
+    archiveDirectory: .dsh-multimodal-router/images
+    cacheDirectory: .dsh-multimodal-router/cache
     discoveryCacheMs: 300000
     resultCacheMs: 3600000
     resultCacheMaxEntries: 64
@@ -139,9 +139,9 @@ Gemma 4 的音频能力是“声音输入、文字输出”，不会直接生成
 
 启用 `automaticAttachments: true` 后，插件会先向 DSH 的请求准入层声明“已路由的视觉能力”，再通过附件服务读取当前会话授权的图片。原始消息和缩略图保持不变；只有真正发往 Provider 的请求会在适配器边界被临时转换为格式化文字。设为 `false` 可关闭自动处理，只保留显式的 `inspect_image` 工具。
 
-`archiveDirectory` 会为每张自动处理的图片保存一份按内容寻址的本地副本。默认目录 `.dsh-vision-router/images` 已被 Git 忽略；设为空字符串可关闭额外归档，聊天预览仍由 DSH 自身的附件存储提供。
+`archiveDirectory` 会为每张自动处理的图片保存一份按内容寻址的本地副本。默认目录 `.dsh-multimodal-router/images` 已被 Git 忽略；设为空字符串可关闭额外归档，聊天预览仍由 DSH 自身的附件存储提供。
 
-模型发现结果默认缓存 5 分钟。自动附件分析使用稳定的“图片内容 + 基础视觉分析”键，同一张图片换一种问法也能复用；结果同时保存在内存和 `.dsh-vision-router/cache`，服务重启后仍可命中，默认有效 1 小时。内存层最多保留 64 条结果，避免缓存自身无限增长。开启实时语音时，图片与语音复用同一个 E2B/E4B 模型；每次本地推理完成后，空闲 60 秒会主动卸载 Gemma，而不是依赖 Ollama 较长的默认驻留时间。
+模型发现结果默认缓存 5 分钟。自动附件分析使用稳定的“图片内容 + 基础视觉分析”键，同一张图片换一种问法也能复用；结果同时保存在内存和 `.dsh-multimodal-router/cache`，服务重启后仍可命中，默认有效 1 小时。内存层最多保留 64 条结果，避免缓存自身无限增长。开启实时语音时，图片与语音复用同一个 E2B/E4B 模型；每次本地推理完成后，空闲 60 秒会主动卸载 Gemma，而不是依赖 Ollama 较长的默认驻留时间。
 
 `realtimeAudio` 控制实时语音功能；`transcriptionLocale` 默认固定为 `zh-CN`，中文识别结果统一转换成简体，不再受浏览器区域设置影响；`audioChunkMs` 默认每 1.5 秒触发一次增量转写，识别结果持续写入输入框；`maxAudioSeconds` 最大为 30；`maxAudioBytes` 限制单次传给本机 Ollama 的 WAV 数据大小。没有兼容模型或 TTS 未就绪时，语音入口自动隐藏。
 
@@ -196,9 +196,9 @@ inspect_image({
 - **调用超时：**增大 `timeoutMs`；模型首次加载通常较慢。
 - **首张图片较慢：**本地模型装载和推理需要时间。推理请求使用 2 分钟 `keep_alive`，插件会在最后一次本地推理完成 60 秒后主动卸载；重复图片优先使用结果缓存。
 - **中文转写出现繁体：**确认 `transcriptionLocale: zh-CN` 并重启 DSH；服务端会在写入输入框前统一转换为简体。
-- **显示朗读但没有声音：**先确认状态已从“正在生成语音”切换为“正在朗读”；运行 `npx @hanchn/dsh-vision-router check-tts` 检查本地 TTS。
+- **显示朗读但没有声音：**先确认状态已从“正在生成语音”切换为“正在朗读”；运行 `npx @hanchn/dsh-multimodal-router check-tts` 检查本地 TTS。
 - **图片格式不支持：**转换为 PNG、JPEG、WebP 或 GIF。
-- **主模型仍提示不支持视觉：**确认 `automaticAttachments: true`，修改插件后重启 DSH，并检查 `vision-router` 已挂载。
+- **主模型仍提示不支持视觉：**确认 `automaticAttachments: true`，修改插件后重启 DSH，并检查 `multimodal-router` 已挂载。
 
 ## 开发
 

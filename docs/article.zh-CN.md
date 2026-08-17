@@ -23,7 +23,7 @@
 DeepSeek Agent ──规划、推理、工具选择──┐
                                       │ 自动附件桥接 / inspect_image
                                       ▼
-                            DSH Vision Router
+                            DSH Multimodal Router
                        ┌──────────────┴──────────────┐
                        ▼                             ▼
                本地 Ollama/Gemma             MLX-Audio/Qwen3-TTS
@@ -55,11 +55,11 @@ Agent 可以像调用文件读取、Shell 或网页搜索一样调用它。插�
 
 本文对应的开源项目是：
 
-<https://github.com/hanchn/dsh-vision-router>
+<https://github.com/hanchn/dsh-multimodal-router>
 
 ## 三、项目目标：默认黑盒，进阶可配置
 
-Vision Router 的设计目标不是要求用户先理解模型标签、推理端口和 API 协议，而是提供尽可能简单的默认体验：
+Multimodal Router 的设计目标不是要求用户先理解模型标签、推理端口和 API 协议，而是提供尽可能简单的默认体验：
 
 ```text
 安装插件 → 选择是否下载音色 → 自动发现模型能力 → 图片或连续语音对话
@@ -79,7 +79,7 @@ Vision Router 的设计目标不是要求用户先理解模型标签、推理端
 当前版本保持了非常小的代码表面积：
 
 ```text
-dsh-vision-router/
+dsh-multimodal-router/
 ├── src/
 │   ├── index.js                 # Cordis 插件、Provider、音频路由与服务托管
 │   ├── client.js                # Web 端实时录音、停顿检测、打断与播放
@@ -100,7 +100,7 @@ dsh-vision-router/
 
 ```json
 {
-  "name": "@hanchn/dsh-vision-router",
+  "name": "@hanchn/dsh-multimodal-router",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -116,7 +116,7 @@ dsh-vision-router/
 一个 DSH 工具插件至少要提供插件名称、依赖注入声明、配置 Schema 和 `apply` 生命周期入口：
 
 ```js
-export const name = 'dsh-vision-router'
+export const name = 'dsh-multimodal-router'
 export const inject = ['tools', 'attachments']
 
 export function apply(ctx, config) {
@@ -152,7 +152,7 @@ export function apply(ctx, config) {
 
 本地模型常见的标签包括 `latest`、`q4`、`vision` 或自定义名称。仅依赖名字判断能力并不可靠。
 
-Vision Router 采用两步发现方式：
+Multimodal Router 采用两步发现方式：
 
 1. 调用 Ollama `/api/tags` 枚举本地模型；
 2. 对候选逐一调用 `/api/show`，检查 `model_info`。
@@ -213,12 +213,12 @@ const response = await fetch('http://127.0.0.1:11434/api/chat', {
 插件配置不是单一的 `endpoint + model`，而是一个带优先级的 Provider 列表：
 
 ```yaml
-- id: vision-router
-  name: '@hanchn/dsh-vision-router'
+- id: multimodal-router
+  name: '@hanchn/dsh-multimodal-router'
   config:
     automaticAttachments: true
-    archiveDirectory: .dsh-vision-router/images
-    cacheDirectory: .dsh-vision-router/cache
+    archiveDirectory: .dsh-multimodal-router/images
+    cacheDirectory: .dsh-multimodal-router/cache
     discoveryCacheMs: 300000
     resultCacheMs: 3600000
     resultCacheMaxEntries: 64
@@ -318,7 +318,7 @@ Qwen3-TTS 不是 Ollama 模型，而是由 MLX-Audio 运行。插件把它声明
 
 ```bash
 brew install uv
-npx @hanchn/dsh-vision-router setup-tts
+npx @hanchn/dsh-multimodal-router setup-tts
 ```
 
 选择启用后，插件自动管理本地服务；第一次语音回答下载约 2GB 的 0.6B 8-bit 模型。选择不下载则不开放语音对话入口，也不使用系统音色代替，但图片能力保持可用。点击麦克风会提前解锁专用浏览器音频通道，避免 TTS 冷启动较慢时被浏览器自动播放策略拦截；界面分别显示“正在生成语音”和“正在朗读”。
@@ -344,7 +344,7 @@ http://127.0.0.1:3080
 进入“设置 → 插件 → 插件列表”，可以看到：
 
 ```text
-vision-router，已挂载，已启用
+multimodal-router，已挂载，已启用
 ```
 
 之后可以直接拖入或粘贴图片并提问，也可以显式让 Agent 调用：
@@ -364,7 +364,7 @@ vision-router，已挂载，已启用
 官方 Cordis Context
   → 官方 DSH SystemPrompt
   → 官方 DSH ToolRuntime
-  → 挂载 Vision Router
+  → 挂载 Multimodal Router
   → ctx.tools.execute(inspect_image)
   → Ollama
   → Gemma 视觉分析
@@ -393,7 +393,7 @@ pnpm check
 
 ## 十二、原生附件桥接：让拖图真正可用
 
-DSH Web 支持把图片直接拖入页面，或者把剪贴板图片粘贴到输入框。Vision Router 注入 DSH 的 `attachments` 服务，并在 Provider 适配器边界完成下面的链路：
+DSH Web 支持把图片直接拖入页面，或者把剪贴板图片粘贴到输入框。Multimodal Router 注入 DSH 的 `attachments` 服务，并在 Provider 适配器边界完成下面的链路：
 
 ```text
 拖入/粘贴图片 → DSH attachment store → 会话保留原图缩略图
@@ -412,11 +412,11 @@ adapter.stream = function (options) {
 
 `automaticAttachments: true` 默认开启。插件还会让 DSH 的图片准入检查识别到“路由后的视觉能力”，避免请求在进入 Agent 之前就被纯文本模型能力校验拦截。视觉成功时，DeepSeek 收到带标题、图片名、Provider/模型来源和正文的 Markdown 上下文；会话历史仍展示原图。视觉失败时，插件会把失败原因变成文字，避免把不受支持的图片继续传给纯文本模型。显式的 `inspect_image` 仍可用于本地路径或 Data URL，并使用格式化结果卡片。
 
-插件默认把图片按 SHA-256 内容摘要归档到 `.dsh-vision-router/images/`。该目录已加入 `.gitignore`，文件名不包含原始名称；设置 `archiveDirectory: ''` 可以关闭额外归档。
+插件默认把图片按 SHA-256 内容摘要归档到 `.dsh-multimodal-router/images/`。该目录已加入 `.gitignore`，文件名不包含原始名称；设置 `archiveDirectory: ''` 可以关闭额外归档。
 
 ### 延迟优化
 
-视觉链路的总延迟由本地模型发现、模型装载、Gemma 推理和 DeepSeek 推理共同组成。插件并行检查 Ollama 候选并缓存发现结果；图片和语音优先复用 E2B/E4B；单次视觉输出限制为 256 token；最后一次本地推理完成 60 秒后主动卸载 Gemma。自动附件使用“图片内容 + 稳定基础分析 + Provider 配置”作为缓存键，因此同一张图换一种问法仍可复用；显式 `inspect_image` 的自定义问题仍使用独立缓存键。结果在内存中最多保存 64 条，并持久化到 `.dsh-vision-router/cache`，服务重启后仍可命中，默认有效 1 小时。
+视觉链路的总延迟由本地模型发现、模型装载、Gemma 推理和 DeepSeek 推理共同组成。插件并行检查 Ollama 候选并缓存发现结果；图片和语音优先复用 E2B/E4B；单次视觉输出限制为 256 token；最后一次本地推理完成 60 秒后主动卸载 Gemma。自动附件使用“图片内容 + 稳定基础分析 + Provider 配置”作为缓存键，因此同一张图换一种问法仍可复用；显式 `inspect_image` 的自定义问题仍使用独立缓存键。结果在内存中最多保存 64 条，并持久化到 `.dsh-multimodal-router/cache`，服务重启后仍可命中，默认有效 1 小时。
 
 TTS 采用独立回收策略：Qwen3-TTS 在最后一次朗读完成后保留 5 分钟，兼顾连续对话速度与统一内存回收。首次冷启动仍取决于本机内存带宽和模型大小，这是无法完全消除的成本。
 
@@ -442,14 +442,14 @@ TTS 采用独立回收策略：Qwen3-TTS 在最后一次朗读完成后保留 5 
 - Qwen3-TTS 负责高质量本地语音输出；
 - Ollama 提供本地推理运行时；
 - DeepSeek Harness 负责插件组合、生命周期和 Agent 工具链；
-- Vision Router 负责能力发现、实时语音循环、图片输入、路由和隐私策略。
+- Multimodal Router 负责能力发现、实时语音循环、图片输入、路由和隐私策略。
 
 最终得到的是一个小而清晰的组合：
 
 ```text
-DeepSeek + DSH + Vision Router + Gemma + Qwen3-TTS
+DeepSeek + DSH + Multimodal Router + Gemma + Qwen3-TTS
 ```
 
 它既能保留云端大模型的推理能力，也能让敏感图片与声音优先在本机完成处理，并提供可打断、停顿自动发送、回答自动朗读的连续语音体验。各组件仍可独立替换，而插件对普通用户保持黑盒式的一键体验。
 
-项目地址：<https://github.com/hanchn/dsh-vision-router>
+项目地址：<https://github.com/hanchn/dsh-multimodal-router>

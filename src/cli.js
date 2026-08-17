@@ -8,12 +8,12 @@ const MLX_AUDIO_SOURCE = 'git+https://github.com/Blaizzy/mlx-audio.git@6546e9539
 const START_COMMAND = 'mlx_audio.server --host 127.0.0.1 --port 8000'
 
 function printHelp() {
-  console.log(`dsh-vision-router
+  console.log(`dsh-multimodal-router
 
 Usage:
-  dsh-vision-router setup-tts [--enable|--disable]
+  dsh-multimodal-router setup-tts [--enable|--disable]
                                 Choose whether to install MLX-Audio/Qwen3-TTS
-  dsh-vision-router check-tts   Check whether the local TTS service is ready
+  dsh-multimodal-router check-tts   Check whether the local TTS service is ready
 
 The recommended TTS runtime is optional. If it is not installed, the complete
 voice-conversation feature stays unavailable; image features remain available.`)
@@ -74,7 +74,7 @@ async function setupTts(args) {
     '--with', 'webrtcvad', '--with', 'setuptools<81',
   ], { stdio: 'inherit' })
   if (result.status !== 0) return result.status ?? 1
-  console.log('\nMLX-Audio installed. Vision Router will start and stop it automatically.')
+  console.log('\nMLX-Audio installed. Multimodal Router will start and stop it automatically.')
   console.log('Qwen3-TTS will download automatically on the first spoken response.')
   console.log(`\nManual troubleshooting command:\n  ${START_COMMAND}`)
   return 0

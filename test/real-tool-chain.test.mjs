@@ -44,7 +44,7 @@ test('mounts in the real DSH tool runtime and executes local vision', { timeout:
 
   const result = await ctx.tools.execute({
     signal: new AbortController().signal,
-    callId: 'vision-router-e2e-1',
+    callId: 'multimodal-router-e2e-1',
     name: 'inspect_image',
     arguments: {
       image_path: '/Applications/Ollama.app/Contents/Resources/ollama.png',

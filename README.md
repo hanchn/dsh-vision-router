@@ -1,12 +1,12 @@
-# Vision & Realtime Audio Router for DeepSeek Harness
+# Multimodal Router for DeepSeek Harness
 
 [简体中文](README.zh-CN.md)
 
 A zero-config multimodal plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). It adds image understanding and enables complete local realtime voice conversation when both a compatible model and the local voice runtime are ready.
 
-## Why Vision Router?
+## Why Multimodal Router?
 
-DeepSeek remains the reasoning agent. Vision Router delegates image perception to a local or explicitly configured multimodal model, then returns text evidence to the agent. The default path is private and requires no model name or endpoint configuration.
+DeepSeek remains the reasoning agent. Multimodal Router delegates image perception to a local or explicitly configured multimodal model, then returns text evidence to the agent. The default path is private and requires no model name or endpoint configuration.
 
 ## Features
 
@@ -36,12 +36,12 @@ Qwen3-TTS is not installed through Ollama. The plugin declares MLX-Audio as an o
 
 ```bash
 brew install uv
-npx @hanchn/dsh-vision-router setup-tts
+npx @hanchn/dsh-multimodal-router setup-tts
 ```
 
-The command asks before downloading and defaults to “no”; it never forces installation. For unattended setup, pass `--enable` or `--disable` explicitly. After opt-in, no second service needs to be started manually: Vision Router starts and stops MLX-Audio with DSH. The first spoken response automatically downloads `mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit` (about 2GB) into the local Hugging Face cache. The default voice is the warm female `Serena`; set `tts.voice` to `Vivian`, `Dylan`, `Uncle_Fu`, or `Eric` for another bundled voice.
+The command asks before downloading and defaults to “no”; it never forces installation. For unattended setup, pass `--enable` or `--disable` explicitly. After opt-in, no second service needs to be started manually: Multimodal Router starts and stops MLX-Audio with DSH. The first spoken response automatically downloads `mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit` (about 2GB) into the local Hugging Face cache. The default voice is the warm female `Serena`; set `tts.voice` to `Vivian`, `Dylan`, `Uncle_Fu`, or `Eric` for another bundled voice.
 
-For diagnostics, run `npx @hanchn/dsh-vision-router check-tts`. Directly running `mlx_audio.server --host 127.0.0.1 --port 8000` is only needed for manual troubleshooting.
+For diagnostics, run `npx @hanchn/dsh-multimodal-router check-tts`. Directly running `mlx_audio.server --host 127.0.0.1 --port 8000` is only needed for manual troubleshooting.
 
 If the user declines the download or MLX-Audio is not ready, the voice-conversation control stays hidden and no browser/OS voice fallback is used. Image features remain available.
 
@@ -56,7 +56,7 @@ npx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add .
 npx @deepseek-ai/dsh@0.1.0-rc.6 web
 ```
 
-Then open `http://127.0.0.1:3080`, use the paperclip button to select an image, drag it into the composer, or paste it with `Cmd/Ctrl+V`, and ask a question. Vision Router analyzes the attachment before a text-only DeepSeek model receives the turn.
+Then open `http://127.0.0.1:3080`, use the paperclip button to select an image, drag it into the composer, or paste it with `Cmd/Ctrl+V`, and ask a question. Multimodal Router analyzes the attachment before a text-only DeepSeek model receives the turn.
 
 When both an audio-capable local model and Qwen3-TTS are available, a voice-conversation control appears in the composer. Local incremental recognition runs about every 1.5 seconds and updates the draft; after a pause it finishes the last transcription, sends automatically, reads the completed response through local Qwen3-TTS, and then listens for the next turn. Click during playback to interrupt and speak, or click while listening/waiting to leave voice mode. Gemma 4's per-utterance audio limit is 30 seconds. Raw audio is sent only to local Ollama and is not archived in the project.
 
@@ -90,12 +90,12 @@ The bundled default provider queries Ollama `/api/tags` and inspects candidates 
 Edit the plugin row in your DSH profile patch:
 
 ```yaml
-- id: vision-router
-  name: '@hanchn/dsh-vision-router'
+- id: multimodal-router
+  name: '@hanchn/dsh-multimodal-router'
   config:
     automaticAttachments: true
-    archiveDirectory: .dsh-vision-router/images
-    cacheDirectory: .dsh-vision-router/cache
+    archiveDirectory: .dsh-multimodal-router/images
+    cacheDirectory: .dsh-multimodal-router/cache
     discoveryCacheMs: 300000
     resultCacheMs: 3600000
     resultCacheMaxEntries: 64
@@ -139,9 +139,9 @@ Set `allowRemoteFallback: true` only when images may leave the machine automatic
 
 With `automaticAttachments: true`, the plugin exposes a routed vision capability to DSH's admission layer and reads authorized attachments through its attachment service. The original message and thumbnail stay intact; only the provider-bound request is converted to formatted text at the adapter boundary. Set it to `false` to use only the explicit `inspect_image` tool.
 
-`archiveDirectory` stores a content-addressed local copy of every automatically processed image. The default `.dsh-vision-router/images` directory is ignored by Git. Set it to an empty string to disable the extra archive; DSH's attachment store still supplies the chat preview.
+`archiveDirectory` stores a content-addressed local copy of every automatically processed image. The default `.dsh-multimodal-router/images` directory is ignored by Git. Set it to an empty string to disable the extra archive; DSH's attachment store still supplies the chat preview.
 
-Discovery results are cached for five minutes. Automatic attachments use a stable image-analysis key, so the same image can be reused across differently worded questions. Results are kept both in a bounded 64-entry memory cache and in `.dsh-vision-router/cache`, allowing hits after a service restart. With realtime audio enabled, image and speech reuse the same E2B/E4B model; Gemma is actively unloaded after 60 idle seconds, and the Qwen TTS model after five idle minutes.
+Discovery results are cached for five minutes. Automatic attachments use a stable image-analysis key, so the same image can be reused across differently worded questions. Results are kept both in a bounded 64-entry memory cache and in `.dsh-multimodal-router/cache`, allowing hits after a service restart. With realtime audio enabled, image and speech reuse the same E2B/E4B model; Gemma is actively unloaded after 60 idle seconds, and the Qwen TTS model after five idle minutes.
 
 `realtimeAudio` controls realtime voice mode. `audioChunkMs` defaults to a 1.5-second incremental transcription interval and recognized text is continuously written into the composer. `maxAudioSeconds` is the recording cap (up to 30), and `maxAudioBytes` the WAV request limit. The voice control remains hidden when no compatible model or TTS runtime is available.
 
@@ -196,9 +196,9 @@ inspect_image({
 - **Timeout:** increase `timeoutMs`; first model load can be slow.
 - **Slow first image:** local models take time to load and infer. Requests use a two-minute `keep_alive`, while the plugin actively unloads Gemma 60 seconds after the last local inference; repeated images use the result cache first.
 - **Traditional Chinese transcription:** keep `transcriptionLocale: zh-CN` and restart DSH; the server normalizes Chinese recognition to Simplified Chinese before updating the composer.
-- **Speaking state but no sound:** wait for “generating speech” to change to actual playback, then run `npx @hanchn/dsh-vision-router check-tts` if playback reports an error.
+- **Speaking state but no sound:** wait for “generating speech” to change to actual playback, then run `npx @hanchn/dsh-multimodal-router check-tts` if playback reports an error.
 - **Unsupported image:** convert it to PNG, JPEG, WebP, or GIF.
-- **The main model says it cannot see images:** confirm `automaticAttachments: true`, restart DSH after changing the plugin, and verify that `vision-router` is mounted.
+- **The main model says it cannot see images:** confirm `automaticAttachments: true`, restart DSH after changing the plugin, and verify that `multimodal-router` is mounted.
 
 ## Development
 

@@ -1,6 +1,6 @@
 - insert:
-    - id: vision-router
-      name: '@hanchn/dsh-vision-router'
+    - id: multimodal-router
+      name: '@hanchn/dsh-multimodal-router'
       config:
         providers:
           - id: local-auto
@@ -11,8 +11,8 @@
             priority: 100
         allowRemoteFallback: false
         automaticAttachments: true
-        archiveDirectory: .dsh-vision-router/images
-        cacheDirectory: .dsh-vision-router/cache
+        archiveDirectory: .dsh-multimodal-router/images
+        cacheDirectory: .dsh-multimodal-router/cache
         discoveryCacheMs: 300000
         resultCacheMs: 3600000
         resultCacheMaxEntries: 64
