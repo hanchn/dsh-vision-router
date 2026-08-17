@@ -8,6 +8,12 @@ A zero-config multimodal plugin for [DeepSeek Harness](https://github.com/deepse
 
 DeepSeek remains the reasoning agent. Multimodal Router delegates image perception to a local or explicitly configured multimodal model, then returns text evidence to the agent. The default path is private and requires no model name or endpoint configuration.
 
+## Interface preview
+
+The conversation keeps the uploaded image, the user's question, and the model's answer together in one view.
+
+![DSH multimodal conversation with an uploaded image and model answer](docs/assets/dsh-conversation-demo.jpg)
+
 ## Features
 
 - Zero-config discovery of vision-capable Ollama models via model metadata
