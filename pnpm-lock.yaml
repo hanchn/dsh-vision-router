@@ -17,6 +17,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: ^3.18.1
         version: 3.18.1
+      opencc-js:
+        specifier: ^1.4.1
+        version: 1.4.1
     devDependencies:
       '@deepseek-ai/dsh-llm':
         specifier: ^0.1.0-rc.6
@@ -153,6 +156,9 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
+  opencc-js@1.4.1:
+    resolution: {integrity: sha512-2lPLcrg7cnh1ATSduOxhnk/jq6KlR6w+5Ihl4wF7Z5e5Rva4vxTyugV5rZ7EiUCOZl+EDOLetIix+BhgYDCC+A==}
+
 snapshots:
 
   '@deepseek-ai/cordis@4.0.1':
@@ -265,3 +271,5 @@ snapshots:
       '@standard-schema/spec': 1.1.0
 
   '@standard-schema/spec@1.1.0': {}
+
+  opencc-js@1.4.1: {}

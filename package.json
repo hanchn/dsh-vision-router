@@ -1,28 +1,61 @@
 {
-  "name": "@hanchn/dsh-vision-router",
-  "version": "0.3.0",
-  "description": "Zero-config multi-provider vision routing for DeepSeek Harness",
+  "name": "@hanchn/dsh-multimodal-router",
+  "version": "0.5.0",
+  "description": "Zero-config local vision and realtime audio routing for DeepSeek Harness",
   "type": "module",
   "main": "./src/index.js",
+  "bin": {
+    "dsh-multimodal-router": "./src/cli.js"
+  },
   "exports": {
     ".": "./src/index.js",
+    "./client": "./src/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
     "src",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "README.zh-CN.md",
+    "docs"
   ],
   "license": "MIT",
-  "keywords": ["deepseek-harness", "dsh-plugin", "vision", "multimodal", "ollama", "openai-compatible"],
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "vision",
+    "audio",
+    "speech",
+    "multimodal",
+    "ollama",
+    "openai-compatible"
+  ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hanchn/dsh-vision-router.git"
+    "url": "git+https://github.com/hanchn/dsh-multimodal-router.git"
   },
-  "homepage": "https://github.com/hanchn/dsh-vision-router#readme",
-  "bugs": "https://github.com/hanchn/dsh-vision-router/issues",
+  "homepage": "https://github.com/hanchn/dsh-multimodal-router#readme",
+  "bugs": "https://github.com/hanchn/dsh-multimodal-router/issues",
   "dsh": {
+    "runtimeDependencies": [
+      {
+        "id": "mlx-audio",
+        "kind": "python-service",
+        "optional": true,
+        "managedByPlugin": true,
+        "purpose": "High-quality local Qwen3-TTS spoken replies on Apple Silicon",
+        "install": "npx @hanchn/dsh-multimodal-router setup-tts (interactive, opt-in)",
+        "start": "mlx_audio.server --host 127.0.0.1 --port 8000",
+        "healthUrl": "http://127.0.0.1:8000/v1/models"
+      }
+    ],
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
@@ -30,7 +63,8 @@
   "dependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
-    "@deepseek-ai/schemastery": "^3.18.1"
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "opencc-js": "^1.4.1"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-llm": "^0.1.0-rc.6",
@@ -40,7 +74,8 @@
     "node": ">=22.19"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1 test/model-discovery.test.mjs test/real-tool-chain.test.mjs test/attachment-bridge.test.mjs",
-    "check": "node --check src/index.js && npm test"
+    "setup:tts": "node src/cli.js setup-tts",
+    "test": "node --test --test-concurrency=1 test/model-discovery.test.mjs test/realtime-audio.test.mjs test/real-tool-chain.test.mjs test/attachment-bridge.test.mjs",
+    "check": "node --check src/index.js && node --check src/client.js && node --check src/cli.js && npm test"
   }
 }
